@@ -42,34 +42,22 @@ BANNER
 # ── 1. Prerequisites ─────────────────────────────────────────────────────────
 head1 "1. Checking prerequisites"
 
-if command -v claude >/dev/null 2>&1; then
-  ok "Claude Code CLI found ($(claude --version 2>/dev/null | head -1))"
-elif [ -x "$HOME/.local/bin/claude" ]; then
-  ok "Claude Code CLI found at ~/.local/bin/claude"
+if command -v codex >/dev/null 2>&1; then
+  ok "Codex CLI found ($(codex --version 2>/dev/null | head -1))"
+elif [ -x "$HOME/.local/bin/codex" ]; then
+  ok "Codex CLI found at ~/.local/bin/codex"
 else
-  bad "Claude Code CLI not found."
-  echo "     Install it, then re-run this script:"
-  echo "       npm install -g @anthropic-ai/claude-code"
-  echo "     Then run 'claude' once and sign in with your Claude subscription."
+  bad "Codex CLI not found. Install the official Codex CLI and run codex login first."
   exit 1
-fi
-
-if [ -f "$HOME/.claude.json" ] || [ -d "$HOME/.claude" ]; then
-  ok "Claude Code config found (you appear to be signed in)"
-else
-  warn "No Claude Code config yet. Run 'claude' once and sign in, then come back."
 fi
 
 command -v python3 >/dev/null 2>&1 && ok "python3 found" || { bad "python3 required."; exit 1; }
 
 echo
-echo "  ${BOLD}Chrome extension${OFF} — the agent drives your real Chrome, so it needs:"
-echo "    1. Google Chrome installed and running."
-echo "    2. The Claude in Chrome extension installed and signed in to the SAME"
-echo "       Claude account as your Claude Code CLI."
-echo "    3. Permission granted for job-board sites (greenhouse.io, ashbyhq.com,"
-echo "       lever.co, and company career pages)."
-echo "  ${DIM}Without it every run stops immediately and logs 'extension not connected'.${OFF}"
+echo "  ${BOLD}Chrome connection${OFF} — the agent drives your real Chrome."
+echo "    Connect Chrome to your Codex browser tools and allow the ATS sites."
+echo "    Review the repository hooks with /hooks in an interactive Codex session."
+echo "    See docs/browser.md; ./run.sh --browser-check tests the current CLI connection."
 echo
 
 # ── 2. Config files ──────────────────────────────────────────────────────────
@@ -321,12 +309,16 @@ cat <<EOF
   Nothing in there means no invented answers. Anything the agent cannot answer
   from that file, it leaves blank and logs as NEEDS HUMAN.
 
+  Review the generated files, then record approval:
+    ${BOLD}python3 scripts/preflight.py approve${OFF}
+    ${BOLD}./run.sh --check${OFF}
+
   Then:
     ${BOLD}./run.sh${OFF}          one run now, obeying config/settings.json
     ${BOLD}./run.sh 1${OFF}        a single application, good for a first test
     ${BOLD}tail -f logs/scheduled-run.log${OFF}   watch a scheduled run
 
-  Tip for the first run: open the repo in Claude Code and ask for one application,
+  Tip for the first run: open the repo in Codex and ask for one application,
   saying stop before submitting. You see every answer and approve it before it is
   sent. ./run.sh is headless and submits on its own.
 

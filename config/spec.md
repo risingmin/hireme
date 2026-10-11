@@ -1,6 +1,6 @@
 # Run Spec
 
-The contract for one run. `CLAUDE.md` is the how (browser method, widget recipes);
+The contract for one run. `docs/codex-playbook.md` is the how (browser method, widget recipes);
 this file is the what (rules, per-application procedure, log format). Every value comes from
 `config/settings.json`, `config/profile.json`, and `config/answers.md`. Never guess.
 
@@ -32,7 +32,7 @@ and login-free job boards. Applying happens only on the company's own ATS.
    trusted input, which passes. Never fake behavior to beat a detector. Workday usually needs an
    account, so expect to skip most Workday. Login codes count as passwords. The one code the agent may
    enter is a post-Submit email verification code (Greenhouse), pasted through `scripts/code_broker.py`
-   without the agent seeing it. Procedure in CLAUDE.md under "Signed-in portals".
+   without the agent seeing it. Procedure in docs/codex-playbook.md under "Signed-in portals".
 3. **EEO, demographic, veteran, and disability questions** come from the presets in
    `config/answers.md`. No preset → decline to self-identify where the form allows it, otherwise
    NEEDS HUMAN.
@@ -43,7 +43,8 @@ and login-free job boards. Applying happens only on the company's own ATS.
    company a real review and costs the user their name on it.
 7. **HARD ELIGIBILITY MISMATCH → SKIP, not NEEDS HUMAN.** If the posting requires something the
    user structurally cannot meet, it is out of scope: skip it, log one line, move on. This covers
-   a graduation window that excludes theirs, a years-of-experience minimum above the settings
+   a graduation window that excludes all confirmed graduation variants (or the single date
+   when routing is disabled), a years-of-experience minimum above the settings
    ceiling, a required stack they lack, a US-citizen / US-person / clearance / ITAR rule when they
    are not eligible, and a residency requirement they cannot meet.
    NEEDS HUMAN is ONLY for a role the user IS eligible for that is missing a fact they could
@@ -56,28 +57,27 @@ and login-free job boards. Applying happens only on the company's own ATS.
 1. Find the posting. Confirm the role matches `targets`, is not on the skip list, and is not
    already in `applications/` / `data/queue.md` / `logs/applications-log.md`. Verify the URL is
    LIVE — postings rot within days, and a req id from a previous run can be dead.
-2. Upload the resume from the path in `config/profile.json` using `file_upload`. Pick the closest
+2. If `config/resume-routing.json` exists, first follow `docs/resume-routing.md` and run the
+   router on the complete posting assessment. SELECT supplies application-local resume and
+   graduation/enrollment facts; SKIP and NEEDS HUMAN prohibit proceeding. Record the selected
+   variant and evidence and verify date consistency throughout the form. Otherwise use
+   the resume path in `config/profile.json`. Upload using the documented flow in `docs/browser.md`. Pick the closest
    template in `config/answers.md` for any free text.
-3. Fill EVERY field with the `computer` tool (trusted input) on the real Chrome. Presets only.
+3. Fill EVERY field with documented real-Chrome input tools on the real Chrome. Presets only.
 4. Verify 0 invalid required fields (`aria-invalid`) and dump the field values with a read-only
    eval. BEFORE submit: append the log line to `logs/applications-log.md` AND write
    `applications/<company>-<role>.md` with every question, every answer, the URL, and the date.
-5. Submit with a real trusted click. Save a confirmation screenshot (JPG) directly into
+5. Submit with a real trusted click. Save a confirmation screenshot (JPG, or genuine PNG if the runtime supplies PNG) directly into
    `screenshots/`. Never record or export GIFs, and never touch `~/Downloads`. Mark the per-app doc
    and the log SUBMITTED with the date.
 6. Blocked at any point (login wall, interactive CAPTCHA, missing preset, missing file) → NEEDS
    HUMAN with details in the per-app doc and the log, then move on.
-7. **Tab hygiene (safety):** the extension has its OWN isolated MCP tab group. Only ever close or
-   navigate tabs that `tabs_context_mcp` lists for that group; never the user's other tabs. At run
-   start, close leftover job-application tabs from prior crashed runs and work in ONE reused tab.
-   After each company, navigate that tab straight to the next posting so no half-filled form is
-   left. If the tab group drops mid-fill, reconnect, abandon the partial form, and restart that
-   company from a clean tab.
-8. **MANDATORY LAST STEP — close the tab group.** Do not park a tab on `about:blank`; a blank tab
-   keeps the group visible in Chrome. Call `tabs_context_mcp`, `tabs_close_mcp` on EVERY tab id it
-   lists, then call `tabs_context_mcp` once more and confirm it returns "No tab group exists for
-   this session." Run this even when the run submitted nothing. Sole exception: a form intentionally
-   left open for the user. Keep that one tab, close the rest, and say so in the log line.
+7. **Tab hygiene:** follow `docs/browser.md`. Create one new tab, retain its id, and touch
+   only tabs created by this run. Never reclaim or close personal tabs based on an inventory.
+   Reuse the owned tab between companies. If submit may have occurred during interruption,
+   mark SUBMISSION UNCERTAIN and reconcile before any retry.
+8. **Last step:** close only owned tabs, except forms intentionally handed off to the user.
+   Mark those as handoffs using the documented API and record their URLs and remaining action.
 
 ALWAYS record the date applied. ALWAYS keep a per-application doc in `applications/` with all Q&A.
 
@@ -96,4 +96,15 @@ ALWAYS record the date applied. ALWAYS keep a per-application doc in `applicatio
 2. Add a new status block at the top of `state/status.md`: what was submitted, what was skipped and
    why, which leads are vetted and ready for the next run, and any new lesson about a form or a
    board. This is what the next run reads instead of re-researching.
-3. Close every tab in the group (see step 8 above).
+3. Close only this run's owned tabs, preserving deliberate human handoffs (see step 8 above).
+
+## Codex integrity and permissions
+
+Run `scripts/preflight.py check` before starting. Facts, presets, documents, and settings
+must match the user-reviewed manifest; application runs may not alter or approve them.
+The `.codex/hooks.json` guard must be reviewed and trusted through `/hooks` before runs.
+It checks unchanged reviewed files and obvious secret reads; it is not a security sandbox.
+Browser capability checks happen before sourcing. Missing tools, denied site access, or
+runtime-required confirmations without a human are NEEDS HUMAN. Never bypass permissions.
+All consent/willingness and personal-history answers need confirmed presets. Historical
+recipe examples are not facts about this user. Sponsorship logic is preserved by the port.

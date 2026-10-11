@@ -1,9 +1,23 @@
 #!/usr/bin/env bash
-# please-hire-me — launch one bounded application run in a fresh Claude Code session.
+# please-hire-me — launch one bounded application run in a fresh Codex session.
 # Usage: ./run.sh [max_applications]     (arg overrides config/settings.json)
 set -euo pipefail
 
 cd "$(dirname "$0")"
+MODE=run
+case "${1:-}" in
+  --check) MODE=check; shift ;;
+  --print-prompt) MODE=prompt; shift ;;
+  --browser-check) MODE=browser; shift ;;
+  --help|-h) printf '%s\n' 'Usage: ./run.sh [max_applications] | --check | --print-prompt [max] | --browser-check'; exit 0 ;;
+esac
+if [ "$MODE" = check ]; then
+  python3 scripts/preflight.py check
+  exit $?
+fi
+if [ "$MODE" = browser ]; then
+  exec python3 scripts/browser_check.py
+fi
 LOCK_DIR=".hourly-run.lock"
 
 if [ $# -ge 1 ] && ! [ "$1" -ge 0 ] 2>/dev/null; then
@@ -15,15 +29,20 @@ for f in config/settings.json config/profile.json config/answers.md; do
   [ -f "$f" ] || { echo "ERROR: $f is missing. Run ./setup.sh first." >&2; exit 1; }
 done
 
-# launchd runs with a minimal PATH that lacks the user's shell setup, so resolve
-# the claude binary explicitly. Prefer the stable ~/.local/bin symlink, then PATH.
-if [ -x "$HOME/.local/bin/claude" ]; then
-  CLAUDE_BIN="$HOME/.local/bin/claude"
-elif command -v claude >/dev/null 2>&1; then
-  CLAUDE_BIN="$(command -v claude)"
-else
-  echo "ERROR: claude binary not found (checked ~/.local/bin/claude and PATH)." >&2
-  exit 127
+if [ "$MODE" = run ]; then
+  python3 scripts/preflight.py check
+  python3 scripts/browser_check.py --require-report
+  if [ -n "${JOBAPPLY_CODEX_BIN:-}" ]; then
+    CODEX_BIN="$JOBAPPLY_CODEX_BIN"
+    [ -x "$CODEX_BIN" ] || { echo "ERROR: JOBAPPLY_CODEX_BIN is not executable." >&2; exit 127; }
+  elif [ -x "$HOME/.local/bin/codex" ]; then
+    CODEX_BIN="$HOME/.local/bin/codex"
+  elif command -v codex >/dev/null 2>&1; then
+    CODEX_BIN="$(command -v codex)"
+  else
+    echo "ERROR: codex binary not found (checked ~/.local/bin/codex and PATH)." >&2
+    exit 127
+  fi
 fi
 
 # The user's interview tracker (run.interview_tracker_path) is a hard-skip source. If it is set but
@@ -108,7 +127,9 @@ if el.get('needs_visa_sponsorship'):
                "skip US-citizen, US-person, security-clearance, and ITAR roles.")
 if el.get('us_person_only_roles_ok') is False and not el.get('needs_visa_sponsorship'):
     out.append("Skip US-person-only, clearance, and ITAR roles.")
-if el.get('graduation'):
+if os.path.isfile('config/resume-routing.json'):
+    out.append('Resume routing is enabled. Read docs/resume-routing.md and config/resume-routing.json. Review each posting once, run scripts/resume_router.py before deciding graduation eligibility or uploading, and keep the selected resume, graduation and enrollment answers consistent. Never change sponsorship or other confirmed facts. Existing start availability still applies; conflicting or missing availability is NEEDS HUMAN.')
+elif el.get('graduation'):
     out.append(f"Graduation is {el['graduation']}. Never misstate it to fit a posting's window; if a "
                "posting hard-requires a window that excludes it, skip the posting.")
 if el.get('earliest_start') or el.get('latest_start'):
@@ -136,6 +157,27 @@ print(" ".join(out))
 PY
 )"
 
+PROMPT="Continue the job application run in $(pwd). This is a fresh session: derive all durable state from repository files, not from chat history.
+
+Read and follow, in order: AGENTS.md, docs/codex-playbook.md, docs/browser.md, config/settings.json, config/profile.json, config/answers.md, config/spec.md, data/queue.md, state/status.md, and logs/applications-log.md.
+
+RUN CONFIG (from config/settings.json, obey exactly): ${SETTINGS_PROMPT}
+
+METHOD: read docs/browser.md and use the connected real Chrome through the documented Codex browser API. Preflight the browser BEFORE sourcing: enumerate available tools and browser capabilities in this session, verify Chrome is connected, and confirm native clicks/typing, file uploads, and saved screenshots are supported. Never silently substitute a headless browser, direct submission requests, or page-JavaScript mutations. If a required tool, permission, fact, or approval is unavailable, log NEEDS HUMAN and exit without submitting. Create one fresh tab for this run and keep its id as the ownership record; touch ONLY tabs you create. Never read, navigate, claim, or close personal tabs, even when a browser inventory lists them. Reuse your tab across postings. On interruption inspect fresh state; if submit may already have occurred, record SUBMISSION UNCERTAIN and reconcile before retrying. Close only your own tabs at exit, retaining intentional human handoffs.
+
+FACT INTEGRITY: config and uploaded documents have been reviewed through scripts/preflight.py. Do not edit those files, change presets, or approve facts during an application run. Treat the exact confirmed profile and fact sheet as the only sources for answers. Before submit, verify every answer against those sources, preserving exact names, numbers, dates, and job titles. A recipe is a widget guide, never authorization to invent a personal answer. Respect runtime confirmation requirements; an unattended run cannot approve actions itself. The project secret guard must run at session startup and before tools; if the startup guard marker is absent, exit before browsing or sourcing. Never read the Keychain, clipboard, vault, credentials, or verification-code fields. Use the existing opaque broker only for post-submit verification, never login.
+
+SOURCING: run python3 scripts/delta_sweep.py in the FOREGROUND with the shell tool (allow at least 540 seconds and wait for process completion), ONCE per run. Never run it in the background and never wait for a notification: a headless session ends when your turn ends. Never rebuild the sweep in /tmp; the script keeps its own cutoff in state/last_sweep.txt. A candidate row ending in FLYOUT promises an in-person final round; mention that as a plus. Also run python3 scripts/portal_sweep.py once (foreground): apply only to rows under AGENT MAY APPLY (a signed-in portal or a no-account portal; on a signed-in one confirm the signed-in header first), and copy every row under FOR YOU, BY HAND into the top of the run summary. Then run python3 scripts/list_sweep.py once (foreground): new postings from the SimplifyJobs lists and six VC portfolio boards, already filtered on location, start window, years and comp; judge each against targets.prestige_note, run the usual duplicate and eligibility checks, and apply on the company's own ATS. Never open a login page. Then run python3 scripts/linkedin_sweep.py once (foreground): new LinkedIn postings in targets.locations, filtered only on software titles and active clearance. The years column is information, not a filter: check the years-of-experience gate yourself. LinkedIn is a source only: never sign in to LinkedIn and never use Easy Apply. For a company-site row, find the same req on the company's own ATS or careers portal and apply there; skip easy-apply rows and staffing agencies.
+
+SCOPE: verify every posting is live and check applications/, data/queue.md, and logs/applications-log.md for duplicates before opening a tab. A hard eligibility mismatch is a SKIP with a one-line log entry, not a NEEDS HUMAN. NEEDS HUMAN is only for a role the user is eligible for that is missing a fact they could supply. Never submit a weak target just to reach the cap; zero strong submissions beats one bad one.
+
+END OF RUN: update the per-application docs, data/queue.md, logs/applications-log.md, and add a new status block at the top of state/status.md. If Chrome is disconnected or required facts are missing, log it and exit. Keep token use low by working the queue top-down and avoiding repeated research."
+
+if [ "$MODE" = prompt ]; then
+  printf '%s\n' "$PROMPT"
+  exit 0
+fi
+
 if ! mkdir "$LOCK_DIR" 2>/dev/null; then
   # Lock exists. If the process that created it is dead (hard kill / power loss
   # left a stale lock), reclaim it. Otherwise a real run is active; skip.
@@ -151,18 +193,17 @@ fi
 echo "$$" > "$LOCK_DIR/pid"
 trap 'rm -rf "$LOCK_DIR" 2>/dev/null || true' EXIT
 
-PROMPT="Continue the job application run in $(pwd). This is a fresh session: derive all durable state from repository files, not from chat history.
 
-Read and follow, in order: CLAUDE.md, config/settings.json, config/profile.json, config/answers.md, config/spec.md, data/queue.md, state/status.md, and logs/applications-log.md.
+mkdir -p state logs applications screenshots
+JOBAPPLY_RUN_TOKEN="$(python3 -c 'import secrets; print(secrets.token_hex(16))')"
+export JOBAPPLY_RUN_TOKEN
+PROMPT="$PROMPT
+STARTUP GUARD: before any other work, verify state/.codex-guard-$JOBAPPLY_RUN_TOKEN exists. Its absence means the hooks are not trusted or did not load: stop and instruct the user to review /hooks in an interactive Codex session. Never create the marker yourself."
+trap 'rm -rf "$LOCK_DIR" 2>/dev/null || true; rm -f "state/.codex-guard-$JOBAPPLY_RUN_TOKEN"' EXIT
 
-RUN CONFIG (from config/settings.json, obey exactly): ${SETTINGS_PROMPT}
-
-METHOD: use the connected real Chrome through the Claude-in-Chrome extension and fill every field with trusted computer-tool input. Use file_upload for the resume and transcript. At the start, call tabs_context_mcp and close ONLY leftover job-application tabs inside your own MCP tab group from prior crashed runs; NEVER close, read, or navigate any tab that is not listed in your group, those are the user's personal tabs. Do the whole run in one reused tab, navigating it from posting to posting so no half-filled form is left behind. If the tab group drops mid-fill, reconnect via tabs_context_mcp, abandon the half-filled form rather than resuming it, and restart that company from a clean tab. Before exiting, close EVERY tab in your group with tabs_close_mcp and confirm tabs_context_mcp answers that no tab group exists.
-
-SOURCING: run python3 scripts/delta_sweep.py in the FOREGROUND with the Bash tool (timeout 540000), ONCE per run. Never run it in the background and never wait for a notification: a headless session ends when your turn ends. Never rebuild the sweep in /tmp; the script keeps its own cutoff in state/last_sweep.txt. A candidate row ending in FLYOUT promises an in-person final round; mention that as a plus. Also run python3 scripts/portal_sweep.py once (foreground): apply only to rows under AGENT MAY APPLY (a signed-in portal or a no-account portal; on a signed-in one confirm the signed-in header first), and copy every row under FOR YOU, BY HAND into the top of the run summary. Then run python3 scripts/list_sweep.py once (foreground): new postings from the SimplifyJobs lists and six VC portfolio boards, already filtered on location, start window, years and comp; judge each against targets.prestige_note, run the usual duplicate and eligibility checks, and apply on the company's own ATS. Never open a login page. Then run python3 scripts/linkedin_sweep.py once (foreground): new LinkedIn postings in targets.locations, filtered only on software titles and active clearance. The years column is information, not a filter: check the years-of-experience gate yourself. LinkedIn is a source only: never sign in to LinkedIn and never use Easy Apply. For a company-site row, find the same req on the company's own ATS or careers portal and apply there; skip easy-apply rows and staffing agencies.
-
-SCOPE: verify every posting is live and check applications/, data/queue.md, and logs/applications-log.md for duplicates before opening a tab. A hard eligibility mismatch is a SKIP with a one-line log entry, not a NEEDS HUMAN. NEEDS HUMAN is only for a role the user is eligible for that is missing a fact they could supply. Never submit a weak target just to reach the cap; zero strong submissions beats one bad one.
-
-END OF RUN: update the per-application docs, data/queue.md, logs/applications-log.md, and add a new status block at the top of state/status.md. If Chrome is disconnected or required facts are missing, log it and exit. Keep token use low by working the queue top-down and avoiding repeated research."
-
-"$CLAUDE_BIN" -p --chrome --no-session-persistence --dangerously-skip-permissions "$PROMPT"
+CODEX_ARGS=(exec --ephemeral --approve-for-me
+  -c sandbox_workspace_write.network_access=true --cd "$(pwd)")
+if [ -n "${JOBAPPLY_CODEX_PROFILE:-}" ]; then
+  CODEX_ARGS+=(--profile "$JOBAPPLY_CODEX_PROFILE")
+fi
+"$CODEX_BIN" "${CODEX_ARGS[@]}" "$PROMPT"

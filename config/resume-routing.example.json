@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "defaults": {"full_time": "may-2027", "internship": "dec-2027"},
+  "variants": [
+    {
+      "id": "may-2027",
+      "resume": "data/resume-may-2027.pdf",
+      "graduation_month": "2027-05",
+      "graduation": "May 2027",
+      "college_end_date": "May 2027 (graduation)",
+      "enrolled_terms": []
+    },
+    {
+      "id": "dec-2027",
+      "resume": "data/resume-dec-2027.pdf",
+      "graduation_month": "2027-12",
+      "graduation": "December 2027",
+      "college_end_date": "December 2027 (graduation)",
+      "enrolled_terms": ["2027-fall"]
+    }
+  ]
+}

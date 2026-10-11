@@ -6,13 +6,13 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-black.svg)](CONTRIBUTING.md)
-[![Runs on Claude Code](https://img.shields.io/badge/runs%20on-Claude%20Code-black.svg)](https://claude.com/claude-code)
+[![Runs on Codex](https://img.shields.io/badge/runs%20on-Codex-black.svg)](https://learn.chatgpt.com/docs/non-interactive-mode)
 [![macOS | Linux](https://img.shields.io/badge/macOS-%7C%20Linux-black.svg)](#quick-start)
 
 You set it up once, in one conversation of about five minutes, and it writes your config from your
 resume. After that it runs autonomously, finding live openings, internships and new-grad roles
 alike, filling the company's own Greenhouse / Lever / Ashby form field by field in your real Chrome,
-and submitting. Every answer is logged before it clicks, every submit is screenshotted, and it never
+and submitting when the runtime permits it. Every answer is logged before it clicks, every submit is screenshotted, and it never
 invents a fact about you.
 
 </div>
@@ -21,33 +21,24 @@ invents a fact about you.
 
 ## Quick start
 
-**You need:** [Claude Code](https://claude.com/claude-code) signed in · Chrome with the
-[Claude in Chrome](https://claude.ai/chrome) extension on the same account · your resume as a PDF.
+**You need:** Codex signed in · connected real Chrome browser tools · your resume as a PDF.
+This checkout uses `codex exec`. Browser configuration belongs to your Codex
+runtime; a browser available in a desktop conversation may not be available to a scheduled CLI.
+See [the browser adapter](docs/browser.md) for supported tools, uploads, screenshots, and ownership.
 
-<details>
-<summary>Setting up the Chrome extension</summary>
-
-Three steps, all manual, none of them scriptable. Chrome requires a real user gesture to install an
-extension and to grant it a site, which is the correct behaviour and not something this repo should
-try to work around.
-
-1. Install [Claude in Chrome](https://claude.ai/chrome).
-2. Sign in with the **same Anthropic account** as your Claude Code session. A mismatch looks exactly
-   like the extension not being installed.
-3. Let it access the ATS domains when it asks. Access is granted per site.
-
-Setup checks this for you before the first application and tells you which of the three is missing,
-so you are not debugging it halfway through a filled form.
-
-</details>
+Before unattended use, open the repo in an interactive Codex session and use `/hooks` to review
+and trust [.codex/hooks.json](.codex/hooks.json). The launcher does not bypass hook trust or
+sandbox approvals. Run `./run.sh --browser-check` to test the CLI with a local dummy form and
+file. This makes no real applications and reads no personal profile. It records whether clicks,
+typing, uploads, screenshot saving, tab cleanup, and the project guard actually worked.
 
 ```bash
-git clone https://github.com/alecswang/please-hire-me.git
-cd please-hire-me
+git clone https://github.com/risingmin/hireme.git
+cd hireme
 ```
 
-Open the repo in Claude Code and say *"set me up"*. Setup is one conversation, about five minutes,
-and Claude does the typing:
+Open the repo in Codex and say *"set me up"*. Setup is one conversation, about five minutes,
+and Codex does the typing:
 
 1. It asks for your resume and reads it.
 2. It shows you every value it pulled out so you can correct what is wrong.
@@ -55,8 +46,7 @@ and Claude does the typing:
    will use for anything you skip. Work authorization, start date, what counts as a good job to you.
 4. It drafts your answer templates from your real work and reads them back for you to approve.
 
-Then it writes your three config files. It never invents a fact about you, and it does not open a
-browser or apply to anything during setup.
+Then it writes your three config files. It uses only your confirmed facts. Config preparation does not apply to anything; the optional first application happens separately, with a checkpoint.
 
 <details>
 <summary>Prefer a terminal wizard?</summary>
@@ -64,13 +54,16 @@ browser or apply to anything during setup.
 `./setup.sh` asks the questions every form asks and writes your config in about two minutes. It
 leaves `config/answers.md` as a blank template for you to fill in yourself, which takes about
 twenty minutes and is the step that decides whether the agent flies or stalls at every "why do you
-want this role?". Letting Claude draft it from your resume is why the guided path is the default.
+want this role?". Letting Codex draft it from your resume is why the guided path is the default.
 
 </details>
 
 **Run it:**
 
 ```bash
+python3 scripts/preflight.py approve  # after reviewing your exact config and documents
+./run.sh --check  # check config, files, and recorded review
+./run.sh --browser-check  # test the actual CLI browser and trusted guard
 ./run.sh          # one run, using your settings
 ./run.sh 1        # a single application, good for a first test
 ```
@@ -82,11 +75,11 @@ want this role?". Letting Claude draft it from your resume is why the guided pat
 every answer, and submits only after you say yes. Say no and it closes the tab and sends nothing.
 A real application with a checkpoint, not a rehearsal.
 
-**Scheduled runs submit on their own.** Once `schedule.frequency` is set and the job is installed,
-there is no per-application checkpoint. That is the point of it.
+**Scheduled runs can submit on their own.** Once `schedule.frequency` is set and the job is installed,
+there is no application checkpoint supplied by this launcher. Codex site permissions and runtime-required confirmations still apply; a run that cannot obtain them logs NEEDS HUMAN. A schedule cannot bypass them.
 
 **Want a checkpoint every time?** `./run.sh` cannot give you one, it launches a headless session
-with nobody there to approve. Instead, open the repo in Claude Code and ask for a run, saying stop
+with nobody there to approve. Instead, open the repo in Codex and ask for a run, saying stop
 before submitting. You get the same checkpoint as the first application, every time.
 
 </details>
@@ -105,8 +98,21 @@ writes all three for you:
 | `config/settings.json` | Cap per run, frequency, and what counts as a target: roles, locations, comp floor, skip list, your quality bar. | your answers to the question list |
 
 Each has a `.example` twin showing exactly what belongs there. Your real files are gitignored, so
-nothing about you leaves your machine. Edit any of them by hand later; the agent rereads them every
+ordinary commits exclude your private files. The AI service processes information supplied to it, and employers receive your applications. Edit any of them by hand later; the agent rereads them every
 run.
+
+### Fact review and safe diagnostics
+
+After setup, review the generated profile, answers, settings, resume, and optional transcript.
+`python3 scripts/preflight.py approve` records hashes of those exact files. The launcher refuses
+unreviewed or changed files; it never silently approves them. Missing required files, placeholder
+identity values, disabled hard safety rules, and unreadable interview trackers also stop the run.
+This protects the source files; the agent must still verify that each form answer matches them.
+
+`./run.sh --print-prompt 1` renders the run instructions without starting Codex, opening Chrome,
+or acquiring the run lock. It may contain private targeting/interview notes: do not share its output.
+The sourcing scripts, sponsorship logic, queue, history, company caps, and optional broker are retained.
+Consent and willingness require confirmed presets; widget recipes are not facts about a user.
 
 ## Settings
 
@@ -159,7 +165,7 @@ You sign up or sign in once in Chrome, then add the portal's host to `channels.s
 ```
 
 `scripts/portal_sweep.py` lists new postings on these portals every run. If a run finds you signed out,
-it logs NEEDS HUMAN with the link instead of logging in. **Workday sessions expire within hours**, so
+it logs NEEDS HUMAN with the link instead of logging in. **Workday sessions can expire within hours**, so
 Workday applications work best in an interactive session right after you sign in. Portals that need
 no account at all (Netflix, Millennium, Uber, Renaissance, D. E. Shaw) are applied to directly.
 
@@ -170,7 +176,7 @@ It is used only for that post-submit check, never to log in anywhere. Setup, abo
 
 1. Turn on 2-Step Verification on your Google account, then create an app password at
    <https://myaccount.google.com/apppasswords>.
-2. In **your own Terminal** (not through Claude), store it in the macOS Keychain:
+2. In **your own Terminal** (not through Codex), store it in the macOS Keychain:
    ```bash
    security add-generic-password -s jobapply-gmail-imap -a you@gmail.com -w
    ```
@@ -180,8 +186,7 @@ It is used only for that post-submit check, never to log in anywhere. Setup, abo
    `signup_email_pattern` like `you+{tag}@gmail.com`).
 4. Check it: `python3 scripts/code_broker.py check` prints `{"status": "ok"}` or says what is missing.
 
-Never paste the app password into a chat. `.claude/hooks/block-secret-read.sh` stops the agent's
-shell from reading the Keychain or clipboard, as a guardrail.
+Never paste the app password into a chat. `.codex/hooks/policy.py` guards obvious Keychain, clipboard, and vault reads when trusted in Codex. It is a policy hook, not an OS sandbox.
 
 **3. Your interview tracker.** If you track interviews in a note (Obsidian or any text file), set
 `run.interview_tracker_path` to its path and write each company as a `[[wikilink]]`. Every company in
@@ -202,7 +207,7 @@ your real answers.
 **Real browser, real keystrokes.** ATS forms score behavior with reCAPTCHA v3. Page JavaScript
 produces untrusted events and gets flagged as spam; so does a headless or devtools-driven browser.
 The agent clicks and types in your normal Chrome the way you would. Not an evasion trick, just the
-honest way to operate a browser, which is why submissions land normally.
+honest way to operate a browser, but it does not guarantee an ATS will accept a submission.
 
 **It ships with a map.** [`data/boards.md`](data/boards.md) lists 235 Ashby and Greenhouse boards
 verified live, with job counts and which ones publish salary bands.
@@ -239,7 +244,10 @@ answer, a line in the log, a confirmation screenshot, and `state/status.md` as m
 please-hire-me/
 ├── setup.sh                  # one-time interactive setup
 ├── run.sh                    # one bounded run
-├── CLAUDE.md                 # the agent's playbook: browser method, widget recipes, rules
+├── AGENTS.md                 # Codex entry point and hard rules
+├── docs/codex-playbook.md     # setup, sourcing, form recipes, answering rules
+├── docs/browser.md           # Codex browser capabilities and ownership
+├── .codex/hooks.json         # review/trust in Codex with /hooks
 ├── config/
 │   ├── settings.json         # run knobs and target criteria      (yours, gitignored)
 │   ├── profile.json          # every field value an ATS asks for  (yours, gitignored)
@@ -272,11 +280,9 @@ please-hire-me/
 <details>
 <summary><b>FAQ</b></summary>
 
-**Does this get me flagged as a bot?** No. It fills forms with genuine trusted input in your own
-browser. Passive reCAPTCHA v3 passes. Interactive challenges are handed back to you.
+**Does this get me flagged as a bot?** The agent uses real Chrome input and never fabricates behavioral signals. ATS acceptance is not guaranteed; interactive challenges are handed back to you.
 
-**What does a run cost?** It runs on your Claude Code subscription, so usage rather than dollars per
-application. Sourcing goes over JSON APIs specifically to keep it cheap.
+**What does a run cost?** It uses your configured Codex account or API authentication; billing and limits depend on that configuration. There is no fixed per-application cost. Sourcing goes over JSON APIs specifically to keep it cheap.
 
 **Does it do internships?** Yes, and it is probably the best fit for them. Put `internship` in
 `targets.seniority`. Internships post hourly pay, so the full-time annual floor is ignored for
@@ -287,7 +293,7 @@ Northwestern quant list are all internship-first.
 **Can I use it for non-engineering roles?** Yes. Nothing is engineering-specific except the defaults
 in `settings.example.json` and the source list. Change the roles and the fact sheet.
 
-**How long is setup, really?** About five minutes of your attention. Claude reads the resume, shows
+**How long is setup, really?** About five minutes of your attention. Codex reads the resume, shows
 you what it found, asks one list of questions, and drafts `config/answers.md` for you. The wizard
 path is faster to run and slower to finish, because it hands you a blank `answers.md`.
 
@@ -315,6 +321,18 @@ value. See [CONTRIBUTING.md](CONTRIBUTING.md).
 One rule above all: **never contribute anything that helps the agent lie.** No fabricated answers,
 no CAPTCHA solving, no fake behavioral signals. A PR that makes it better at pretending to be a
 human gets closed.
+
+## Optional graduation-based resume routing
+
+Use two truthful graduation plans: the example defaults to May 2027 for full-time/new-grad
+roles and December 2027 for internships. Posting requirements override those defaults;
+neither qualifying means SKIP, and unclear requirements mean NEEDS HUMAN. The selected
+resume and all graduation/enrollment answers must agree. Sponsorship rules stay unchanged.
+
+Provide both matching PDFs, copy `config/resume-routing.example.json` to the private
+`config/resume-routing.json`, review its dates and enrolled terms, then run
+`python3 scripts/preflight.py approve`. The router reuses the existing posting review
+without a separate model call. See [setup and usage](docs/resume-routing.md).
 
 ## License
 

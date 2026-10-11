@@ -22,7 +22,7 @@ NEEDS HUMAN. That constraint is the product, not a limitation to engineer around
 
 ## Good first contributions
 
-**Widget recipes** (`CLAUDE.md`, "Tricky widget recipes"). You hit an ATS control that ate your
+**Widget recipes** (`docs/codex-playbook.md`, "Tricky widget recipes"). You hit an ATS control that ate your
 input. You worked out why. Write down the symptom, the cause, and the fix in three lines. These are
 the highest-value contributions in the repo because every user hits the same widget.
 
@@ -47,7 +47,7 @@ failed on yours, that is a bug worth a PR: better detection, clearer errors, Lin
 ## What not to send
 
 - Personal data. Yours or anyone's. See the check below.
-- A rewrite of `CLAUDE.md` into a different structure. It is the agent's working memory and it is
+- A rewrite of `docs/codex-playbook.md` into a different structure. It is the agent's working memory and it is
   tuned; add to it rather than reorganizing it.
 - New runtime dependencies. The project is bash plus python3 standard library, on purpose. It has to
   run on a fresh laptop with nothing installed.
@@ -78,7 +78,7 @@ git status --porcelain
 git diff --cached --stat
 
 # 2. Shell still parses.
-bash -n setup.sh run.sh scripts/*.sh
+for task_file in setup.sh run.sh scripts/*.sh; do bash -n "$task_file" || exit; done
 
 # 3. Config templates still parse.
 python3 -m json.tool config/settings.example.json > /dev/null
@@ -86,8 +86,15 @@ python3 -m json.tool config/profile.example.json  > /dev/null
 
 # 4. The launcher builds its prompt from your settings without erroring.
 #    (This prints the prompt instead of starting a run.)
-sed 's|^"$CLAUDE_BIN" -p.*|printf "%s\\n" "$PROMPT"|' run.sh > /tmp/run-render.sh
-bash /tmp/run-render.sh 1 | head -20
+./run.sh --print-prompt 1 | head -20
+
+# 5. Offline port regressions, no actual applications.
+python3 -m unittest discover -s tests -v
+python3 scripts/linkedin_sweep.py --selftest
+
+# 6. CLI browser integration using a local dummy form only.
+# Review/trust the repo guard with /hooks first; do not bypass trust.
+./run.sh --browser-check
 ```
 
 If you touched `run.sh` or `config/settings.example.json`, do one dry run end to end and paste the
@@ -115,7 +122,7 @@ symptom. Never paste your filled-in answers, your resume, or a screenshot with y
 
 - Shell: `set -euo pipefail`, quote your variables, no dependencies beyond coreutils and python3.
 - Python: standard library only, 3.9 compatible.
-- Prose in `CLAUDE.md`, `config/spec.md`, and the docs: concise, specific, no em dashes, no
+- Prose in `docs/codex-playbook.md`, `config/spec.md`, and the docs: concise, specific, no em dashes, no
   marketing words. Write the symptom and the fix, not the story.
 - Commits: one change per commit, present tense, say what changed and why in the body if it is not
   obvious from the subject.

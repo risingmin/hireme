@@ -1,0 +1,2 @@
+# Project config layer. Hooks next to this file are reviewed through Codex /hooks.
+# Keep account, model, browser connection, and approval preferences in the user's config.

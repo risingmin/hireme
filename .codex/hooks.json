@@ -1,0 +1,7 @@
+{
+  "description": "Job application secret guard and reviewed-fact integrity checks. Review with /hooks before running.",
+  "hooks": {
+    "SessionStart": [{"hooks": [{"type": "command", "command": "python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/policy.py\"", "timeout": 10, "statusMessage": "Checking job application facts"}]}],
+    "PreToolUse": [{"hooks": [{"type": "command", "command": "python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/policy.py\"", "timeout": 10, "statusMessage": "Checking secret-store and fact policy"}]}]
+  }
+}
